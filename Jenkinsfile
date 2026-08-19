@@ -52,11 +52,7 @@ pipeline {
 
                         scp "$JAR" "$EC2_USER@$EC2_HOST:$DEPLOY_DIR/$JAR_NAME"
 
-                        ssh "$EC2_USER@$EC2_HOST" \
-                          "EC2_USER='$EC2_USER' DEPLOY_DIR='$DEPLOY_DIR' JAR_NAME='$JAR_NAME' bash -s" <<'REMOTE_SCRIPT'
-                            set -eu
-
-                            sudo tee /etc/systemd/system/image-uploader.service > /dev/null <<EOF
+                        cat > image-uploader.service <<EOF
 [Unit]
 Description=Java Image Uploader Spring Boot Application
 After=network.target
@@ -74,14 +70,19 @@ SuccessExitStatus=143
 WantedBy=multi-user.target
 EOF
 
-                            sudo systemctl daemon-reload
-                            sudo systemctl enable image-uploader
-                            sudo systemctl restart image-uploader
-                            sleep 3
-                            sudo systemctl --no-pager --full status image-uploader
-                            curl -fsS http://localhost:8080/ > /dev/null
-                            echo 'Deployment verification passed.'
-REMOTE_SCRIPT
+                        scp image-uploader.service "$EC2_USER@$EC2_HOST:/tmp/image-uploader.service"
+
+                        ssh "$EC2_USER@$EC2_HOST" \
+                          "sudo mv /tmp/image-uploader.service /etc/systemd/system/image-uploader.service && \
+                           sudo systemctl daemon-reload && \
+                           sudo systemctl enable image-uploader && \
+                           sudo systemctl restart image-uploader && \
+                           sleep 3 && \
+                           sudo systemctl --no-pager --full status image-uploader && \
+                           curl -fsS http://localhost:8080/ > /dev/null"
+
+                        echo 'Deployment verification passed.'
+                        rm -f image-uploader.service
                     '''
                 }
             }
