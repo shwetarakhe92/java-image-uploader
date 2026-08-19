@@ -15,28 +15,20 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
         stage('Build') {
-            steps {
-                sh 'mvn -B clean package -DskipTests'
-            }
+            steps { sh 'mvn -B clean package -DskipTests' }
         }
 
         stage('Archive Artifact') {
-            steps {
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-            }
+            steps { archiveArtifacts artifacts: 'target/*.jar', fingerprint: true }
         }
 
         stage('Deploy to EC2') {
             when {
-                expression {
-                    params.EC2_HOST?.trim()
-                }
+                expression { params.EC2_HOST?.trim() }
             }
             steps {
                 sshagent(credentials: [params.SSH_CREDENTIAL_ID]) {
@@ -54,7 +46,8 @@ pipeline {
 
                         scp "$JAR" "$EC2_USER@$EC2_HOST:$DEPLOY_DIR/$JAR_NAME"
 
-                        ssh "$EC2_USER@$EC2_HOST" "bash -s" <<'REMOTE_SCRIPT'
+                        ssh "$EC2_USER@$EC2_HOST" \
+                          "EC2_USER='$EC2_USER' DEPLOY_DIR='$DEPLOY_DIR' JAR_NAME='$JAR_NAME' bash -s" <<'REMOTE_SCRIPT'
                             set -eu
                             sudo bash -c 'cat > /etc/systemd/system/image-uploader.service <<EOF
 [Unit]
@@ -89,14 +82,8 @@ REMOTE_SCRIPT
     }
 
     post {
-        success {
-            echo 'CI/CD pipeline completed successfully.'
-        }
-        failure {
-            echo 'Pipeline failed. Review the failed stage in Jenkins Console Output.'
-        }
-        always {
-            sh 'rm -f ~/.ssh/known_hosts 2>/dev/null || true'
-        }
+        success { echo 'CI/CD pipeline completed successfully.' }
+        failure { echo 'Pipeline failed. Review the failed stage in Jenkins Console Output.' }
+        always { sh 'rm -f ~/.ssh/known_hosts 2>/dev/null || true' }
     }
 }
