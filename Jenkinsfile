@@ -77,9 +77,20 @@ EOF
                            sudo systemctl daemon-reload && \
                            sudo systemctl enable image-uploader && \
                            sudo systemctl restart image-uploader && \
-                           sleep 3 && \
-                           sudo systemctl --no-pager --full status image-uploader && \
-                           curl -fsS http://localhost:8080/ > /dev/null"
+                           echo 'Waiting for application to become ready...' && \
+                           for i in {1..30}; do \
+                               if curl -fsS http://localhost:8080/ > /dev/null 2>&1; then \
+                                   echo 'Application is ready.'; \
+                                   break; \
+                               fi; \
+                               if [ \"$i\" -eq 30 ]; then \
+                                   echo 'Application did not become ready within 60 seconds.'; \
+                                   sudo systemctl --no-pager --full status image-uploader || true; \
+                                   sudo journalctl -u image-uploader -n 80 --no-pager || true; \
+                                   exit 1; \
+                               fi; \
+                               sleep 2; \
+                           done"
 
                         echo 'Deployment verification passed.'
                         rm -f image-uploader.service
