@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'EC2_HOST', defaultValue: '', description: 'Public IPv4 address or DNS name of the EC2 instance')
-        string(name: 'EC2_USER', defaultValue: 'ec2-user', description: 'SSH user for the EC2 instance')
+        string(name: 'EC2_HOST', defaultValue: '', description: 'Private IPv4 address or DNS name of the application EC2 instance')
+        string(name: 'EC2_USER', defaultValue: 'ec2-user', description: 'SSH user for the application EC2 instance')
         string(name: 'SSH_CREDENTIAL_ID', defaultValue: 'ec2-ssh-key', description: 'Jenkins SSH private-key credential ID')
     }
 
@@ -15,15 +15,21 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
         stage('Build') {
-            steps { sh 'mvn -B clean package -DskipTests' }
+            steps {
+                sh 'mvn -B clean package -DskipTests'
+            }
         }
 
         stage('Archive Artifact') {
-            steps { archiveArtifacts artifacts: 'target/*.jar', fingerprint: true }
+            steps {
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
         }
 
         stage('Deploy to EC2') {
@@ -49,7 +55,8 @@ pipeline {
                         ssh "$EC2_USER@$EC2_HOST" \
                           "EC2_USER='$EC2_USER' DEPLOY_DIR='$DEPLOY_DIR' JAR_NAME='$JAR_NAME' bash -s" <<'REMOTE_SCRIPT'
                             set -eu
-                            sudo bash -c 'cat > /etc/systemd/system/image-uploader.service <<EOF
+
+                            sudo tee /etc/systemd/system/image-uploader.service > /dev/null <<EOF
 [Unit]
 Description=Java Image Uploader Spring Boot Application
 After=network.target
@@ -65,7 +72,7 @@ SuccessExitStatus=143
 
 [Install]
 WantedBy=multi-user.target
-EOF'
+EOF
 
                             sudo systemctl daemon-reload
                             sudo systemctl enable image-uploader
@@ -82,8 +89,14 @@ REMOTE_SCRIPT
     }
 
     post {
-        success { echo 'CI/CD pipeline completed successfully.' }
-        failure { echo 'Pipeline failed. Review the failed stage in Jenkins Console Output.' }
-        always { sh 'rm -f ~/.ssh/known_hosts 2>/dev/null || true' }
+        success {
+            echo 'CI/CD pipeline completed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Review the failed stage in Jenkins Console Output.'
+        }
+        always {
+            sh 'rm -f ~/.ssh/known_hosts 2>/dev/null || true'
+        }
     }
 }
