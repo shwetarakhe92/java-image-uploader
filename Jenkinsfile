@@ -52,48 +52,22 @@ pipeline {
 
                         scp "$JAR" "$EC2_USER@$EC2_HOST:$DEPLOY_DIR/$JAR_NAME"
 
-                        cat > image-uploader.service <<EOF
-[Unit]
-Description=Java Image Uploader Spring Boot Application
-After=network.target
-
-[Service]
-Type=simple
-User=$EC2_USER
-WorkingDirectory=$DEPLOY_DIR
-ExecStart=/usr/bin/java -jar $DEPLOY_DIR/$JAR_NAME
-Restart=always
-RestartSec=10
-SuccessExitStatus=143
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-                        scp image-uploader.service "$EC2_USER@$EC2_HOST:/tmp/image-uploader.service"
-
                         ssh "$EC2_USER@$EC2_HOST" \
-                          "sudo mv /tmp/image-uploader.service /etc/systemd/system/image-uploader.service && \
-                           sudo systemctl daemon-reload && \
-                           sudo systemctl enable image-uploader && \
-                           sudo systemctl restart image-uploader && \
+                          "sudo systemctl restart $APP_NAME && \
                            echo 'Waiting for application to become ready...' && \
-                           for i in {1..30}; do \
+                           for i in \$(seq 1 30); do \
                                if curl -fsS http://localhost:8080/ > /dev/null 2>&1; then \
                                    echo 'Application is ready.'; \
-                                   break; \
-                               fi; \
-                               if [ \"$i\" -eq 30 ]; then \
-                                   echo 'Application did not become ready within 60 seconds.'; \
-                                   sudo systemctl --no-pager --full status image-uploader || true; \
-                                   sudo journalctl -u image-uploader -n 80 --no-pager || true; \
-                                   exit 1; \
+                                   exit 0; \
                                fi; \
                                sleep 2; \
-                           done"
+                           done; \
+                           echo 'Application did not become ready within 60 seconds.'; \
+                           sudo systemctl --no-pager --full status $APP_NAME || true; \
+                           sudo journalctl -u $APP_NAME -n 80 --no-pager || true; \
+                           exit 1"
 
                         echo 'Deployment verification passed.'
-                        rm -f image-uploader.service
                     '''
                 }
             }
